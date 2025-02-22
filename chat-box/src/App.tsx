@@ -33,44 +33,66 @@ const App: React.FC = () => {
 
   const sendMessage = async () => {
     if (!input.trim() || activeChatId === null) return;
-
-    setChats((prevChats) =>
-      prevChats.map((chat) =>
-        chat.id === activeChatId
-          ? {
-              ...chat,
-              messages: [...chat.messages, { role: "user", content: input }],
-              title: chat.messages.length === 0 ? input : chat.title,
-            }
-          : chat
-      )
-    );
-
+  
+    setChats((prevChats) => {
+      return prevChats
+        .map((chat) =>
+          chat.id === activeChatId
+            ? {
+                ...chat,
+                messages: [
+                  ...chat.messages,
+                  { role: "user" as "user", content: input }, 
+                ],
+                title: chat.messages.length === 0 ? input : chat.title,
+              }
+            : chat
+        )
+        .sort((a, b) => (a.id === activeChatId ? -1 : b.id === activeChatId ? 1 : 0)); 
+    });
+  
     try {
       const response = await axios.post("https://your-backend-api.com/chat", {
         message: input,
       });
-
-      setChats((prevChats) =>
-        prevChats.map((chat) =>
-          chat.id === activeChatId
-            ? { ...chat, messages: [...chat.messages, { role: "bot", content: response.data.reply }] }
-            : chat
-        )
-      );
+  
+      setChats((prevChats) => {
+        return prevChats
+          .map((chat) =>
+            chat.id === activeChatId
+              ? {
+                  ...chat,
+                  messages: [
+                    ...chat.messages,
+                    { role: "bot" as "bot", content: response.data.reply }, 
+                  ],
+                }
+              : chat
+          )
+          .sort((a, b) => (a.id === activeChatId ? -1 : b.id === activeChatId ? 1 : 0));
+      });
     } catch (error) {
       console.error("Error fetching response:", error);
       setChats((prevChats) =>
-        prevChats.map((chat) =>
-          chat.id === activeChatId
-            ? { ...chat, messages: [...chat.messages, { role: "bot", content: "Error getting response." }] }
-            : chat
-        )
+        prevChats
+          .map((chat) =>
+            chat.id === activeChatId
+              ? {
+                  ...chat,
+                  messages: [
+                    ...chat.messages,
+                    { role: "bot" as "bot", content: "Error getting response." }, 
+                  ],
+                }
+              : chat
+          )
+          .sort((a, b) => (a.id === activeChatId ? -1 : b.id === activeChatId ? 1 : 0))
       );
     }
-
+  
     setInput("");
   };
+  
 
   /** Sidebar Resize Handlers **/
   const startResizing = () => {
