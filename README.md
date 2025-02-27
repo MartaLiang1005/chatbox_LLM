@@ -19,6 +19,7 @@ A dynamic, interactive chatbox interface designed to integrate with the **Epiq L
 ```sh
 git clone https://github.com/your-username/chatbox_LLM.git
 cd chatbox_LLM
+cd chat-box
 ```
 
 ### **2️⃣ Install Dependencies**
@@ -28,6 +29,6 @@ npm install
 
 ### **3️⃣ Start the Development Server**
 ```sh
-npm start 
+npm run dev 
 ```
 ---
