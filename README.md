@@ -2,7 +2,7 @@
 
 A dynamic, interactive chatbox interface designed to integrate with the **Epiq LLM** project. This application supports **multiple chat sessions**, **resizable sidebar**, and **real-time AI-powered conversations**.
 
-![DEMO]((image-1.png))
+![DEMO]((image.png))
 
 ---
 
