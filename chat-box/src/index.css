@@ -88,6 +88,8 @@ body, html {
   flex-grow: 1;
   padding: 20px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .message {
@@ -101,12 +103,16 @@ body, html {
   background: #007bff;
   color: white;
   align-self: flex-end;
+  text-align: right;
+  border-bottom-right-radius: 0;
 }
 
 .bot {
   background: #ddd;
   color: black;
   align-self: flex-start;
+  text-align: left;
+  border-bottom-left-radius: 0;
 }
 
 /* Input Area */
@@ -114,6 +120,7 @@ body, html {
   display: flex;
   padding: 50px;
   border-top: 1px solid #ccc;
+  
 }
 
 .input-container input {
