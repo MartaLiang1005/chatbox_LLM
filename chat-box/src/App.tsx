@@ -2,6 +2,8 @@ import React, { useState, useRef } from "react";
 import "./App.css";
 import axios from "axios";
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+
 interface Message {
   role: "user" | "bot";
   content: string;
@@ -52,8 +54,8 @@ const App: React.FC = () => {
     });
   
     try {
-      const response = await axios.post("https://your-backend-api.com/chat", {
-        message: input,
+      const response = await axios.post(`${BACKEND_URL}/chat`, {
+        user_input: input, 
       });
   
       setChats((prevChats) => {
@@ -64,7 +66,7 @@ const App: React.FC = () => {
                   ...chat,
                   messages: [
                     ...chat.messages,
-                    { role: "bot" as "bot", content: response.data.reply }, 
+                    { role: "bot" as 'bot', content: `Cypher Query:\n${response.data.cypher_query}\n\nResults:\n${JSON.stringify(response.data.results, null, 2)}` }
                   ],
                 }
               : chat
