@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import "./App.css";
 import axios from "axios";
 
@@ -31,16 +31,18 @@ const App: React.FC = () => {
     };
     setChats((prev) => [...prev, newChat]);
     setActiveChatId(newChat.id);
+    setInput("");        
   };
-
 
   const sendMessage = async () => {
     if (!input.trim() || activeChatId === null) return;
 
-    // Add user message
+    // Build the new user message
     const userMsg: Message = { role: "user", content: input };
-    setChats(prev =>
-      prev.map(chat =>
+
+    // 1) Optimistically add user message to state
+    setChats((prev) =>
+      prev.map((chat) =>
         chat.id === activeChatId
           ? { ...chat, messages: [...chat.messages, userMsg] }
           : chat
@@ -48,54 +50,51 @@ const App: React.FC = () => {
     );
 
     try {
-      const { data } = await axios.post(`${BACKEND_URL}/chat`, { user_input: input });
-      // Handle backend response structure
+      const { data } = await axios.post(`${BACKEND_URL}/chat`, {
+        user_input: input,
+        history: chats.find((c) => c.id === activeChatId)?.messages,
+      });
+
+      let botMsg: Message;
+
       if (data.clarify_person) {
         const optionsList = data.ambiguous_names
-          .map((item: any) => `${item.name}: ${item.options.join(', ')}`)
+          .map((item: any) => `${item.name}: ${item.options.join(", ")}`)
           .join("\n");
-        const botMsg: Message = {
+        botMsg = {
           role: "bot",
           content: `${data.message}\n${optionsList}`,
         };
-        setChats(prev =>
-          prev.map(chat =>
-            chat.id === activeChatId
-              ? { ...chat, messages: [...chat.messages, botMsg] }
-              : chat
-          )
-        );
       } else if (data.reframed_question && data.termination_status === false) {
-        // general clarification
-        const botMsg: Message = {
+        botMsg = {
           role: "bot",
           content: `${data.reframed_question}\n${data.confirmation_message}`,
         };
-        setChats(prev =>
-          prev.map(chat =>
-            chat.id === activeChatId
-              ? { ...chat, messages: [...chat.messages, botMsg] }
-              : chat
-          )
-        );
       } else {
-        // normal response
-        const botMsg: Message = { role: "bot", content: data.natural_response };
-        setChats(prev =>
-          prev.map(chat =>
-            chat.id === activeChatId
-              ? { ...chat, messages: [...chat.messages, botMsg] }
-              : chat
-          )
-        );
+        botMsg = {
+          role: "bot",
+          content: data.natural_response,
+        };
       }
-    } catch (err) {
-      console.error(err);
-      const botMsg: Message = { role: "bot", content: "Error fetching response." };
-      setChats(prev =>
-        prev.map(chat =>
+
+      // 3) Append bot response
+      setChats((prev) =>
+        prev.map((chat) =>
           chat.id === activeChatId
             ? { ...chat, messages: [...chat.messages, botMsg] }
+            : chat
+        )
+      );
+    } catch (err) {
+      console.error(err);
+      const errorMsg: Message = {
+        role: "bot",
+        content: "Error fetching response.",
+      };
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === activeChatId
+            ? { ...chat, messages: [...chat.messages, errorMsg] }
             : chat
         )
       );
@@ -103,7 +102,6 @@ const App: React.FC = () => {
 
     setInput("");
   };
-  
 
   /** Sidebar Resize Handlers **/
   const startResizing = () => {
@@ -122,7 +120,7 @@ const App: React.FC = () => {
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     window.addEventListener("mousemove", resizeSidebar);
     window.addEventListener("mouseup", stopResizing);
     return () => {
@@ -131,10 +129,16 @@ const App: React.FC = () => {
     };
   }, []);
 
+  const activeChat = chats.find((c) => c.id === activeChatId);
+
   return (
     <div className="app-container">
       {/* Sidebar */}
-      <div ref={sidebarRef} className="sidebar" style={{ width: `${sidebarWidth}%` }}>
+      <div
+        ref={sidebarRef}
+        className="sidebar"
+        style={{ width: `${sidebarWidth}%` }}
+      >
         <h2>e-Discovery LLM</h2>
         <button className="new-chat-btn" onClick={createNewChat}>
           + New Chat
@@ -143,8 +147,11 @@ const App: React.FC = () => {
           {chats.map((chat) => (
             <li
               key={chat.id}
-              className={`history-item ${chat.id === activeChatId ? "active" : ""}`}
-              onClick={() => setActiveChatId(chat.id)}
+              className={`history-item ${
+                chat.id === activeChatId ? "active" : ""
+              }`}
+              onClick={() => {setActiveChatId(chat.id);  
+                setInput("");}}
             >
               {chat.title}
             </li>
@@ -155,16 +162,14 @@ const App: React.FC = () => {
 
       {/* Chat Window */}
       <div className="chat-container">
-        {activeChatId !== null ? (
+        {activeChat ? (
           <>
             <div className="chat-messages">
-              {chats
-                .find((chat) => chat.id === activeChatId)
-                ?.messages.map((msg, index) => (
-                  <div key={index} className={`message ${msg.role}`}>
-                    {msg.content}
-                  </div>
-                ))}
+              {activeChat.messages.map((msg, idx) => (
+                <div key={idx} className={`message ${msg.role}`}>
+                  {msg.content}
+                </div>
+              ))}
             </div>
             <div className="input-container">
               <input
@@ -172,13 +177,15 @@ const App: React.FC = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask a question..."
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()} 
+                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
               />
               <button onClick={sendMessage}>Send</button>
             </div>
           </>
         ) : (
-          <div className="empty-chat">Start a new chat by clicking "+ New Chat"</div>
+          <div className="empty-chat">
+            Start a new chat by clicking "+ New Chat"
+          </div>
         )}
       </div>
     </div>

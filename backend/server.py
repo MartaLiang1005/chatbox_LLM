@@ -487,62 +487,111 @@ def demo_check(reframed_question):
         return {'ambiguous_names': ambiguous}
     return {'cleaned_question': reframed_question}
 
+EMAIL_RX = re.compile(r"^[^@]+@[^@]+\.[^@]+$")
+
 @app.route('/chat', methods=['POST'])
 def chat():
     data = request.get_json() or {}
-    user_input = data.get('user_input')
+    user_input = data.get('user_input', '').strip()
+    history = data.get('history', [])
+
     if not user_input:
-        return jsonify({'error': "Missing 'user_input' parameter"}), 400
+        return jsonify({'error': "Missing 'user_input'"}), 400
 
     logger.info("User Query: %s", user_input)
 
-    # 1. Clarification
-    history = [
-        {'role': 'developer', 'content': REFRAME_QUESTION_PROMPT},
-        {'role': 'user', 'content': user_input}
-    ]
-    clar = clarify_user_question(history)
+    # --- Email‐only response branch ---------------------------
+    # If the user just typed an email address, assume they're
+    # picking from the earlier "multiple matches" list.
+    if EMAIL_RX.match(user_input) and history:
+        # find the last non-email user question in history
+        original_q = None
+        for msg in reversed(history):
+            if msg['role']=='user' and not EMAIL_RX.match(msg['content']):
+                original_q = msg['content']
+                break
+
+        if original_q:
+            # replace the first capitalized token (the name) with the email
+            name_m = re.search(r"\b[A-Z][a-z]+\b", original_q)
+            if name_m:
+                fixed_q = original_q.replace(name_m.group(0), user_input)
+            else:
+                fixed_q = original_q
+
+            # now jump straight to Cypher
+            cypher = prompt_to_cypher(user_input=fixed_q)
+            if not cypher:
+                return jsonify({'error': "Failed to generate Cypher"}), 500
+            if cypher.startswith("Please clarify."):
+                return jsonify({'natural_response': cypher}), 200
+
+            results = error_handling_query(cypher)
+            if not results:
+                return jsonify({
+                    'cypher_query': cypher,
+                    'results': [],
+                    'natural_response': "No matching data found."
+                }), 200
+
+            natural = format_result_naturally(original_q, cypher, results)
+            return jsonify({
+                'cypher_query': cypher,
+                'results': results,
+                'natural_response': natural
+            }), 200
+        
+    # 1) Clarify via LLM
+    msg_list = [{'role': 'developer', 'content': REFRAME_QUESTION_PROMPT}]
+    msg_list.extend(history)
+    if not (history and history[-1].get('role')=='user' and history[-1].get('content')==user_input):
+        msg_list.append({'role':'user','content':user_input})
+
+    clar = clarify_user_question(msg_list)
     if 'error' in clar:
         return jsonify({'error': clar['error']}), 500
     if clar['reframed_question'].startswith("Please clarify."):
         return jsonify({
             'reframed_question': clar['reframed_question'],
-            'explanation': clar['explanation'],
+            'explanation':      clar['explanation'],
             'confirmation_message': clar['confirmation_message'],
             'termination_status': False
         }), 200
 
-    reframed = clar['reframed_question']
-
-    # 2. Person-entity validation
-    check = demo_check(reframed)
+    # 2) Disambiguate PERSON entities
+    check = demo_check(clar['reframed_question'])
     if 'error' in check:
         return jsonify({'error': check['error']}), 400
     if 'ambiguous_names' in check:
         return jsonify({
             'clarify_person': True,
-            'message': "Multiple persons matched; please choose one.",
+            'message':       "Multiple persons matched; please choose one.",
             'ambiguous_names': check['ambiguous_names'],
             'termination_status': False
         }), 200
 
-    cleaned = check['cleaned_question']
-
-    # 3. Cypher generation
-    cypher = prompt_to_cypher(cleaned)
+    # 3) Generate Cypher
+    cypher = prompt_to_cypher(user_input=check['cleaned_question'])
     if not cypher:
-        return jsonify({'error': "Failed to generate Cypher query."}), 500
+        return jsonify({'error': "Failed to generate Cypher"}), 500
     if cypher.startswith("Please clarify."):
         return jsonify({'natural_response': cypher}), 200
 
-    # 4. Execute
+    # 4) Execute & 5) Format
     results = error_handling_query(cypher)
     if not results:
-        return jsonify({'cypher_query': cypher, 'results': [], 'natural_response': "No matching data found."}), 200
+        return jsonify({
+            'cypher_query': cypher,
+            'results': [],
+            'natural_response': "No matching data found."
+        }), 200
 
-    # 5. Natural language
     natural = format_result_naturally(user_input, cypher, results)
-    return jsonify({'cypher_query': cypher, 'results': results, 'natural_response': natural})
+    return jsonify({
+        'cypher_query': cypher,
+        'results': results,
+        'natural_response': natural
+    }), 200
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
