@@ -107,12 +107,12 @@ body, html {
   border-bottom-right-radius: 0;
 }
 
-.bot {
-  background: #ddd;
-  color: black;
-  align-self: flex-start;
-  text-align: left;
-  border-bottom-left-radius: 0;
+.assistant {
+  background-color: #f0f0f0; /* Light grey for assistant */
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 10px;
+  margin: 5px 0;
 }
 
 /* Input Area */

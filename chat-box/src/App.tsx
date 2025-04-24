@@ -5,7 +5,7 @@ import axios from "axios";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 interface Message {
-  role: "user" | "bot";
+  role: "user" | "assistant";
   content: string;
 }
 
@@ -62,17 +62,17 @@ const App: React.FC = () => {
           .map((item: any) => `${item.name}: ${item.options.join(", ")}`)
           .join("\n");
         botMsg = {
-          role: "bot",
+          role: "assistant",
           content: `${data.message}\n${optionsList}`,
         };
       } else if (data.reframed_question && data.termination_status === false) {
         botMsg = {
-          role: "bot",
+          role: "assistant",
           content: `${data.reframed_question}\n${data.confirmation_message}`,
         };
       } else {
         botMsg = {
-          role: "bot",
+          role: "assistant",
           content: data.natural_response,
         };
       }
@@ -88,7 +88,7 @@ const App: React.FC = () => {
     } catch (err) {
       console.error(err);
       const errorMsg: Message = {
-        role: "bot",
+        role: "assistant",
         content: "Error fetching response.",
       };
       setChats((prev) =>

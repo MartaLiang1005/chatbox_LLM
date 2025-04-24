@@ -38,7 +38,7 @@ def send_request(payload):
                 {"role": "user", "content": p}
             ],
             "max_tokens": 200,
-            "temperature": 0,
+            "temperature": 0.1,
             "top_p": 0.95
         },
             timeout=10
@@ -141,11 +141,15 @@ def clarify_user_question(message_list):
 
     # API request payload
     payload = {
-        "model": "gpt-4",
         "messages": message_list,
         "max_tokens": 300,
-        "temperature": 0.3
+        "temperature": 0.3,
+        "top_p": 1.0,
+        "frequency_penalty": 0,
+        "presence_penalty": 0,
     }
+
+    logger.info("Sending request to OpenAI API: %s", payload)
 
     try:
         # Send request to OpenAI API
@@ -180,6 +184,9 @@ def clarify_user_question(message_list):
 
     except requests.exceptions.RequestException as e:
         print(f"API Error: {e}")
+        if e.response is not None:
+            print(f"Status code: {e.response.status_code}")
+            print(f"Response body: {e.response.text}")
         return {"error": "API request failed"}
 
     except json.JSONDecodeError as e:
@@ -518,13 +525,14 @@ def chat():
                 fixed_q = original_q.replace(name_m.group(0), user_input)
             else:
                 fixed_q = original_q
-
             # now jump straight to Cypher
             cypher = prompt_to_cypher(user_input=fixed_q)
             if not cypher:
                 return jsonify({'error': "Failed to generate Cypher"}), 500
             if cypher.startswith("Please clarify."):
-                return jsonify({'natural_response': cypher}), 200
+                return jsonify({'natural_response': cypher,
+                                'termination_status': True
+                                }), 200
 
             results = error_handling_query(cypher)
             if not results:
@@ -538,9 +546,10 @@ def chat():
             return jsonify({
                 'cypher_query': cypher,
                 'results': results,
-                'natural_response': natural
+                'natural_response': natural,
+                'termination_status': True
             }), 200
-        
+
     # 1) Clarify via LLM
     msg_list = [{'role': 'developer', 'content': REFRAME_QUESTION_PROMPT}]
     msg_list.extend(history)
@@ -548,8 +557,10 @@ def chat():
         msg_list.append({'role':'user','content':user_input})
 
     clar = clarify_user_question(msg_list)
+
     if 'error' in clar:
         return jsonify({'error': clar['error']}), 500
+
     if clar['reframed_question'].startswith("Please clarify."):
         return jsonify({
             'reframed_question': clar['reframed_question'],
@@ -569,7 +580,6 @@ def chat():
             'ambiguous_names': check['ambiguous_names'],
             'termination_status': False
         }), 200
-
     # 3) Generate Cypher
     cypher = prompt_to_cypher(user_input=check['cleaned_question'])
     if not cypher:
