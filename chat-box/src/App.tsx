@@ -33,65 +33,74 @@ const App: React.FC = () => {
     setActiveChatId(newChat.id);
   };
 
+
   const sendMessage = async () => {
     if (!input.trim() || activeChatId === null) return;
-  
-    setChats((prevChats) => {
-      return prevChats
-        .map((chat) =>
+
+    // Add user message
+    const userMsg: Message = { role: "user", content: input };
+    setChats(prev =>
+      prev.map(chat =>
+        chat.id === activeChatId
+          ? { ...chat, messages: [...chat.messages, userMsg] }
+          : chat
+      )
+    );
+
+    try {
+      const { data } = await axios.post(`${BACKEND_URL}/chat`, { user_input: input });
+      // Handle backend response structure
+      if (data.clarify_person) {
+        const optionsList = data.ambiguous_names
+          .map((item: any) => `${item.name}: ${item.options.join(', ')}`)
+          .join("\n");
+        const botMsg: Message = {
+          role: "bot",
+          content: `${data.message}\n${optionsList}`,
+        };
+        setChats(prev =>
+          prev.map(chat =>
+            chat.id === activeChatId
+              ? { ...chat, messages: [...chat.messages, botMsg] }
+              : chat
+          )
+        );
+      } else if (data.reframed_question && data.termination_status === false) {
+        // general clarification
+        const botMsg: Message = {
+          role: "bot",
+          content: `${data.reframed_question}\n${data.confirmation_message}`,
+        };
+        setChats(prev =>
+          prev.map(chat =>
+            chat.id === activeChatId
+              ? { ...chat, messages: [...chat.messages, botMsg] }
+              : chat
+          )
+        );
+      } else {
+        // normal response
+        const botMsg: Message = { role: "bot", content: data.natural_response };
+        setChats(prev =>
+          prev.map(chat =>
+            chat.id === activeChatId
+              ? { ...chat, messages: [...chat.messages, botMsg] }
+              : chat
+          )
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      const botMsg: Message = { role: "bot", content: "Error fetching response." };
+      setChats(prev =>
+        prev.map(chat =>
           chat.id === activeChatId
-            ? {
-                ...chat,
-                messages: [
-                  ...chat.messages,
-                  { role: "user" as "user", content: input }, 
-                ],
-                title: chat.messages.length === 0 ? input : chat.title,
-              }
+            ? { ...chat, messages: [...chat.messages, botMsg] }
             : chat
         )
-        .sort((a, b) => (a.id === activeChatId ? -1 : b.id === activeChatId ? 1 : 0)); 
-    });
-  
-    try {
-      const response = await axios.post(`${BACKEND_URL}/chat`, {
-        user_input: input, 
-      });
-  
-      setChats((prevChats) => {
-        return prevChats
-          .map((chat) =>
-            chat.id === activeChatId
-              ? {
-                  ...chat,
-                  messages: [
-                    ...chat.messages,
-                    { role: "bot" as 'bot', content: `Cypher Query:\n${response.data.cypher_query}\n\nResults:\n${JSON.stringify(response.data.results, null, 2)}` }
-                  ],
-                }
-              : chat
-          )
-          .sort((a, b) => (a.id === activeChatId ? -1 : b.id === activeChatId ? 1 : 0));
-      });
-    } catch (error) {
-      console.error("Error fetching response:", error);
-      setChats((prevChats) =>
-        prevChats
-          .map((chat) =>
-            chat.id === activeChatId
-              ? {
-                  ...chat,
-                  messages: [
-                    ...chat.messages,
-                    { role: "bot" as "bot", content: "Error getting response." }, 
-                  ],
-                }
-              : chat
-          )
-          .sort((a, b) => (a.id === activeChatId ? -1 : b.id === activeChatId ? 1 : 0))
       );
     }
-  
+
     setInput("");
   };
   
