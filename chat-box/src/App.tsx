@@ -54,9 +54,12 @@ const App: React.FC = () => {
         user_input: input,
         history: chats.find((c) => c.id === activeChatId)?.messages,
       });
-
-      let botMsg: Message;
-
+      let botMsg: Message = {
+        role: "assistant",
+        content: "No response generated.",
+      };
+      
+      console.log(data);
       if (data.clarify_person) {
         const optionsList = data.ambiguous_names
           .map((item: any) => `${item.name}: ${item.options.join(", ")}`)
@@ -71,11 +74,23 @@ const App: React.FC = () => {
           content: `${data.reframed_question}\n${data.confirmation_message}`,
         };
       } else {
+        if (data.results && data.results[0] && data.results[0]["analysis"]) {
+          for (const record in data.results) {
+            if (data.results[record]["analysis"]) {
+              botMsg = {
+                role: "assistant",
+                content: data.results[record]["analysis"] + data.natural_response,
+              };
+          }
+        } 
+      }else if (data.natural_response) {
         botMsg = {
           role: "assistant",
           content: data.natural_response,
         };
       }
+      }
+      
 
       // 3) Append bot response
       setChats((prev) =>
